@@ -6,32 +6,69 @@ import (
 	"time"
 )
 
-func main() {
-	var (
-		expr     *cronexpr.Expression
-		err      error
-		now      time.Time
-		nextTime time.Time
-	)
+type CronJob struct {
+	expr     *cronexpr.Expression
+	nextTime time.Time
+}
 
-	// linux crontab
-	// 支持 秒 粒度，年配置，（枚举到2099）
-	// 分钟（0-59）、小时（0-23）、哪天（1-31）、哪月（1-12）、星期几（0-6）
-	// 已经声明的变量，不要用:=
-	if expr, err = cronexpr.Parse("*/5 * * * * * *"); err != nil {
-		fmt.Println(err)
-		return
+func main() {
+
+	var (
+		cronJob *CronJob
+		expr *cronexpr.Expression
+		now time.Time
+		scheduleTable map[string]*CronJob // key: 任务的名字,
+	)
+	scheduleTable = make(map[string]*CronJob)
+
+	// 当前时间
+	now = time.Now()
+
+
+	// 定义两个 cronjob
+	expr = cronexpr.MustParse("*/5 * * * * * *")
+	cronJob = &CronJob{
+		expr:     expr,
+		nextTime: expr.Next(now),
 	}
 
-	now = time.Now()
-	nextTime = expr.Next(now)
+	scheduleTable["Job1"] = cronJob
 
-	fmt.Println(now, nextTime)
+	expr = cronexpr.MustParse("*/5 * * * * * *")
+	cronJob = &CronJob{
+		expr:     expr,
+		nextTime: expr.Next(now),
+	}
+	// 任务注册到调度表
+	scheduleTable["Job2"] = cronJob
 
-	// 等待定时器超时
-	time.AfterFunc(nextTime.Sub(now), func() {
-		fmt.Println("被调度了：", nextTime)
-	})
-	
-	time.Sleep(time.Second * 5)
+	// 需要有1个调度协程, 它定时检查所有的Cron任务, 谁过期了就执行谁
+	go func() {
+		var (
+			jobName string
+			cronJob *CronJob
+			now time.Time
+		)
+		// for循环 不能少， 检查任务调度表
+		for {
+			now = time.Now()
+			for jobName, cronJob = range scheduleTable {
+				// 判断是否过期
+				if cronJob.nextTime.Before(now) || cronJob.nextTime.Equal(now) {
+					//启动协程，执行任务
+					go func(jobName string) {
+						fmt.Println("执行：",jobName)
+					}(jobName)
+
+					cronJob.nextTime = cronJob.expr.Next(now)
+					fmt.Println("下一次调度时间：", cronJob.nextTime)
+				}
+			}
+		}
+
+		select {
+		case <- time.NewTimer(100*time.Millisecond).C:
+		}
+	}()
+	time.Sleep(20* time.Second)
 }
