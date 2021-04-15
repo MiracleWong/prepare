@@ -28,10 +28,14 @@ var collection *mongo.Collection
 func init() {
 	var(
 		err error
+		clientOptions *options.ClientOptions
 	)
 
 	// 1. 建立连接
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	url := "localhost:27017"
+	mongoUrl := "mongodb://" + url
+	//mongoUrl := "mongodb://" + user + ":" + password + "@" + url + "/" + dbname
+	clientOptions = options.Client().ApplyURI(mongoUrl)
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		log.Fatal(err)
