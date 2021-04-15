@@ -42,7 +42,11 @@ var err error
 var clientOptions *options.ClientOptions
 var collection *mongo.Collection
 var insertOneResult *mongo.InsertOneResult
+var insertManyResult *mongo.InsertManyResult
 var docId primitive.ObjectID
+var record *LogRecord
+var logArr []interface{}
+var InsertId interface{}
 
 //func InitMongoConn(url, dbname string) error {
 //
@@ -102,18 +106,34 @@ func main() {
 	collection = client.Database("cron").Collection("log")
 
 	// 4. 插入记录
-	record := &LogRecord{
+	record = &LogRecord{
 		JobName: "job10",
 		Command: "echo Hello",
 		Err: "",
 		Content: "Hello",
 		TimePoint: TimePoint{StartTime: time.Now().Unix(), EndTime: time.Now().Unix()+10},
 	}
-	if insertOneResult,err = collection.InsertOne(ctx,record); err != nil {
+
+	//// 插入1条记录
+	//if insertOneResult,err = collection.InsertOne(ctx,record); err != nil {
+	//	println(err)
+	//}
+	//
+	//fmt.Println("InsetedID: ", insertOneResult.InsertedID)
+	//docId = insertOneResult.InsertedID.(primitive.ObjectID)
+	//fmt.Println("自增ID：",docId.Hex())
+
+	// 批量插入多条记录
+	logArr = []interface{}{record, record, record}
+	if insertManyResult,err = collection.InsertMany(ctx,logArr); err != nil {
 		println(err)
 	}
 
-	fmt.Println("InsetedID: ", insertOneResult.InsertedID)
-	docId = insertOneResult.InsertedID.(primitive.ObjectID)
-	fmt.Println("自增ID：",docId.Hex())
+	fmt.Println("InsetedID: ", insertManyResult.InsertedIDs)
+
+	// snowflake: 毫秒、微秒的当前时间 + 机器的ID + 微秒内的自增ID
+	for _,InsertId = range insertManyResult.InsertedIDs {
+		docId = InsertId.(primitive.ObjectID)
+		fmt.Println("自增ID：",docId.Hex())
+	}
 }
