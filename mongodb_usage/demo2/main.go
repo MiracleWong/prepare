@@ -35,6 +35,9 @@ type LogRecord struct {
 	TimePoint TimePoint `bson:"timePoint"`
 }
 
+type FindByJobName struct {
+	JobName string `bson:"jobName"`
+}
 
 
 var ctx = context.TODO()
@@ -47,6 +50,8 @@ var docId primitive.ObjectID
 var record *LogRecord
 var logArr []interface{}
 var InsertId interface{}
+var crond *FindByJobName
+var cCursor *mongo.Cursor
 
 //func InitMongoConn(url, dbname string) error {
 //
@@ -107,11 +112,11 @@ func main() {
 
 	// 4. 插入记录
 	record = &LogRecord{
-		JobName: "job10",
-		Command: "echo Hello",
-		Err: "",
-		Content: "Hello",
-		TimePoint: TimePoint{StartTime: time.Now().Unix(), EndTime: time.Now().Unix()+10},
+		JobName:   "job10",
+		Command:   "echo Hello",
+		Err:       "",
+		Content:   "Hello",
+		TimePoint: TimePoint{StartTime: time.Now().Unix(), EndTime: time.Now().Unix() + 10},
 	}
 
 	//// 插入1条记录
@@ -123,17 +128,41 @@ func main() {
 	//docId = insertOneResult.InsertedID.(primitive.ObjectID)
 	//fmt.Println("自增ID：",docId.Hex())
 
-	// 批量插入多条记录
-	logArr = []interface{}{record, record, record}
-	if insertManyResult,err = collection.InsertMany(ctx,logArr); err != nil {
-		println(err)
+	// 5. 批量插入多条记录
+	//logArr = []interface{}{record, record, record}
+	//if insertManyResult,err = collection.InsertMany(ctx,logArr); err != nil {
+	//	println(err)
+	//}
+	//
+	//fmt.Println("InsetedID: ", insertManyResult.InsertedIDs)
+	//
+	//// snowflake: 毫秒、微秒的当前时间 + 机器的ID + 微秒内的自增ID
+	//for _,InsertId = range insertManyResult.InsertedIDs {
+	//	docId = InsertId.(primitive.ObjectID)
+	//	fmt.Println("自增ID：",docId.Hex())
+	//}
+
+	// 6. 按照JobName 字段过滤filter
+	crond = &FindByJobName{JobName: "job10"}
+	var a int64 = 0
+	var b int64 = 10
+	// ops 设置查询的分页方式等
+	ops := &options.FindOptions{Skip: &a, Limit: &b}
+	if cCursor, err = collection.Find(ctx, crond,ops); err != nil {
+		fmt.Println(err)
+		return
 	}
 
-	fmt.Println("InsetedID: ", insertManyResult.InsertedIDs)
+	// 延迟关闭游标
+	defer cCursor.Close(ctx)
 
-	// snowflake: 毫秒、微秒的当前时间 + 机器的ID + 微秒内的自增ID
-	for _,InsertId = range insertManyResult.InsertedIDs {
-		docId = InsertId.(primitive.ObjectID)
-		fmt.Println("自增ID：",docId.Hex())
+	// 遍历结果
+	for cCursor.Next(ctx) {
+		record = &LogRecord{}
+		if err = cCursor.Decode(record); err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(*record)
 	}
 }
